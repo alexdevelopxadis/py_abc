@@ -267,22 +267,22 @@ class ProcesosAdicionales:
             fecha_desde = r_desde
 
             str_query_semanas_ventas += (
-                " ,ROUND(SUM(CASE WHEN v.fecha_venta >= '"
+                " ,SUM(CASE WHEN v.fecha_venta >= '"
                 + fmt(r_desde, "yyyy-MM-dd")
                 + "' AND v.fecha_venta <= '"
                 + fmt(r_hasta, "yyyy-MM-dd")
-                + "' THEN v.sumqty ELSE 0 END),2) AS S"
+                + "' THEN v.sumqty ELSE 0 END) AS S"
                 + str(i + 1)
             )
             str_query_semanas_consumo += (
-                " ,ROUND(SUM(CASE WHEN v.fecha_consumo >= '"
+                " ,SUM(CASE WHEN v.fecha_consumo >= '"
                 + fmt(r_desde, "yyyy-MM-dd")
                 + "' AND v.fecha_consumo <= '"
                 + fmt(r_hasta, "yyyy-MM-dd")
-                + "' THEN v.cantidad ELSE 0 END),2) AS S"
+                + "' THEN v.cantidad ELSE 0 END) AS S"
                 + str(i + 1)
             )
-            str_semanas_general += " ,SUM(X.S" + str(i + 1) + ")"
+            str_semanas_general += " ,ROUND(SUM(X.S" + str(i + 1) + "),2)"
 
         if fecha_desde is None or fecha_hasta is None:
             raise RuntimeError("No se pudieron calcular rangos de semanas")
@@ -293,9 +293,9 @@ class ProcesosAdicionales:
         str_query_ventas += " Select v.numart, v.empresa_id, v.numalm, v.fecha_venta AS fecha_venta "
         str_query_ventas += str_query_semanas_ventas
         str_query_ventas += (
-            " ,ROUND(SUM(IFNULL(v.sumqty,0)),2) AS venta_total"
-            " ,ROUND(MIN(IFNULL(v.sumqty,0)),2) AS venta_minima"
-            " ,ROUND(MAX(IFNULL(v.sumqty,0)),2) AS venta_maxima"
+            " ,SUM(IFNULL(v.sumqty,0)) AS venta_total"
+            " ,MIN(IFNULL(v.sumqty,0)) AS venta_minima"
+            " ,MAX(IFNULL(v.sumqty,0)) AS venta_maxima"
             " ,(SELECT IFNULL(SUM(vc.sumqty * c.cantidad),0)"
             "   FROM mov_ventas_erp vc, rel_combo_articulo c"
             "  WHERE vc.numalm = v.numalm"
@@ -317,9 +317,9 @@ class ProcesosAdicionales:
         str_query_consumos += " Select v.numart, v.empresa_id, v.numalm, v.fecha_consumo AS fecha_venta "
         str_query_consumos += str_query_semanas_consumo
         str_query_consumos += (
-            " ,ROUND(SUM(IFNULL(v.cantidad,0)),2) AS venta_total"
-            " ,ROUND(MIN(IFNULL(v.cantidad,0)),2) AS venta_minima"
-            " ,ROUND(MAX(IFNULL(v.cantidad,0)),2) AS venta_maxima"
+            " ,SUM(IFNULL(v.cantidad,0)) AS venta_total"
+            " ,MIN(IFNULL(v.cantidad,0)) AS venta_minima"
+            " ,MAX(IFNULL(v.cantidad,0)) AS venta_maxima"
             " ,(SELECT IFNULL(SUM(vc.cantidad * c.cantidad),0)"
             "   FROM mov_consumo_erp vc, rel_combo_articulo c"
             "  WHERE vc.numalm = v.numalm"
