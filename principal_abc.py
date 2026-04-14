@@ -17,7 +17,8 @@ class PrincipalABC:
         fecha_ejecucion = fmt(datetime.now(), "yyyy-MM-dd")
         fecha_desde = ""
         fecha_hasta = ""
-
+        # print("test")
+        # return 
         is_ejecucion_total = proceso.upper() == "T"
         print(f"{fmt(datetime.now(), 'dd-MM-yyyy HH:mm:ss')} - *** INICIO PROCESO ABC ***")
 

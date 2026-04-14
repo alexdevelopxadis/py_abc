@@ -12,7 +12,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("proceso", help="T | GM | GMI | AM | AMI")
     parser.add_argument(
         "--hibernate-config",
-        default="src/hibernate.cfg.xml",
+        default="py_abc/hibernate.cfg.xml",
         help="Ruta al hibernate.cfg.xml",
     )
     args = parser.parse_args(argv)

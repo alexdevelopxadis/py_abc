@@ -66,7 +66,7 @@ def _parse_jdbc_url(url: str) -> tuple[str, int, str]:
     return host, port, db
 
 
-def load_hibernate_config(path: str | Path = "src/hibernate.cfg.xml") -> DBConfig:
+def load_hibernate_config(path: str | Path = "hibernate.cfg.xml") -> DBConfig:
     tree = ET.parse(str(path))
     root = tree.getroot()
 
