@@ -97,11 +97,24 @@ class ProcesosAdicionales:
 
     def obtener_almacenes(self, session: DBSession, empresa_id: int) -> list[str]:
         sql = (
-            " SELECT DISTINCT a.numalm "
-            " FROM cat_almacen a "
-            " INNER JOIN rel_almacen_familia af ON af.empresa_id = a.empresa_id AND af.numalm=a.numalm "
-            " WHERE a.activo=1 "
-            f" AND a.empresa_id={empresa_id}"
+            " SELECT DISTINCT x.numalm "
+            " FROM ( "
+            "   SELECT a.numalm "
+            "   FROM cat_almacen a "
+            "   INNER JOIN rel_almacen_familia af ON af.empresa_id = a.empresa_id AND af.numalm = a.numalm "
+            "   WHERE a.activo = 1 "
+            f"     AND a.empresa_id = {empresa_id} "
+            "   UNION "
+            "   SELECT v.numalm "
+            "   FROM mov_ventas_erp v "
+            f"   WHERE v.empresa_id = {empresa_id} "
+            "   UNION "
+            "   SELECT c.numalm "
+            "   FROM mov_consumo_erp c "
+            f"   WHERE c.empresa_id = {empresa_id} "
+            " ) x "
+            " WHERE IFNULL(x.numalm, '') <> '' "
+            " ORDER BY x.numalm "
         )
         return [str(x) for x in session.query_list(sql)]
 
