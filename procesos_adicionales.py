@@ -8,6 +8,175 @@ from .utils import fmt
 
 
 class ProcesosAdicionales:
+    def actualizar_mad_combo(self, session: DBSession, empresa_id: int, fecha: str) -> int:
+        sql = (
+            " UPDATE abc_generado ag_hijo "
+            " INNER JOIN rel_combo_articulo r "
+            "   ON ag_hijo.numart = r.numart "
+            "  AND ag_hijo.empresa_id = r.empresa_id "
+            " INNER JOIN abc_generado ag_padre "
+            "   ON r.cod_combo = ag_padre.numart "
+            "  AND ag_padre.empresa_id = r.empresa_id "
+            f"  AND DATE(ag_padre.fecha_creacion) = DATE('{fecha}') "
+            "  AND ag_padre.tipo_abc = ag_hijo.tipo_abc "
+            "  AND ag_padre.numalm = ag_hijo.numalm "
+            " SET ag_hijo.mad_combo = ag_padre.mad_sku "
+            f" WHERE ag_hijo.empresa_id = {empresa_id} "
+            f"   AND DATE(ag_hijo.fecha_creacion) = DATE('{fecha}') "
+            "   AND ag_hijo.tipo_abc IN ('20', '21', '18', '19') "
+        )
+        return session.execute_update(sql)
+
+    def sumar_mad_combo_sku_por_ids(
+        self,
+        session: DBSession,
+        empresa_id: int,
+        fecha: str,
+        lote_size: int = 500,
+    ) -> int:
+        sql_ids = (
+            " SELECT id_abc "
+            " FROM abc_generado "
+            f" WHERE empresa_id = {empresa_id} "
+            f"   AND DATE(fecha_creacion) = DATE('{fecha}') "
+            "   AND tipo_abc IN ('20', '21', '18', '19') "
+            "   AND (mad_combo IS NOT NULL OR mad_sku IS NOT NULL) "
+            " ORDER BY id_abc "
+        )
+        ids = [int(x) for x in session.query_list(sql_ids)]
+        if not ids:
+            return 0
+
+        total = 0
+        for i in range(0, len(ids), lote_size):
+            chunk = ids[i : i + lote_size]
+            ids_str = ",".join(str(x) for x in chunk)
+            sql_update = (
+                " UPDATE abc_generado "
+                " SET mad = COALESCE(mad_combo, 0) + COALESCE(mad_sku, 0) "
+                f" WHERE empresa_id = {empresa_id} "
+                f"   AND id_abc IN ({ids_str}) "
+            )
+            total += session.execute_update(sql_update)
+        return total
+
+    def get_numart_con_mad_incorrecto(self, session: DBSession, empresa_id: int) -> list[str]:
+        sql = (
+            " SELECT DISTINCT hijo.numart "
+            " FROM reabasto_calculos_combos hijo "
+            " INNER JOIN reabasto_calculos_combos maestro "
+            "   ON maestro.cod_combo = hijo.cod_combo "
+            "  AND maestro.cod_combo = maestro.numart "
+            f" WHERE hijo.empresa_id = {empresa_id} "
+            "   AND maestro.empresa_id = hijo.empresa_id "
+            "   AND hijo.numart <> hijo.cod_combo "
+            "   AND hijo.mad_combo <> maestro.mad_sku "
+        )
+        return [str(x) for x in session.query_list(sql)]
+
+    def actualizar_mad_combo_correcto(self, session: DBSession, empresa_id: int, numart: str) -> int:
+        safe_numart = str(numart).replace("'", "''")
+        sql = (
+            " UPDATE reabasto_calculos_combos hijo "
+            " INNER JOIN reabasto_calculos_combos maestro "
+            "   ON maestro.cod_combo = hijo.cod_combo "
+            "  AND maestro.cod_combo = maestro.numart "
+            "  AND maestro.empresa_id = hijo.empresa_id "
+            " SET hijo.mad_combo = maestro.mad_sku "
+            f" WHERE hijo.empresa_id = {empresa_id} "
+            f"   AND hijo.numart = '{safe_numart}' "
+            "   AND hijo.mad_combo <> maestro.mad_sku "
+        )
+        return session.execute_update(sql)
+
+    def actualizar_mad_combo_reabasto(self, session: DBSession, empresa_id: int) -> int:
+        sql = (
+            " UPDATE reabasto_calculos_combos ag "
+            " SET ag.mad_combo_receta = ag.mad_combo * ag.cantidad_receta "
+            f" WHERE ag.empresa_id = {empresa_id} "
+            "   AND ag.cantidad_receta > 0 "
+        )
+        return session.execute_update(sql)
+
+    def actualizar_mad_combo_planificado_reabasto(self, session: DBSession, empresa_id: int) -> int:
+        sql = (
+            " UPDATE reabasto_calculos_combos ag_hijo "
+            " INNER JOIN ( "
+            "   SELECT numart, empresa_id, SUM(mad_combo_receta) AS suma_mad_sku "
+            "   FROM reabasto_calculos_combos "
+            f"   WHERE empresa_id = {empresa_id} "
+            "     AND numart IS NOT NULL "
+            "   GROUP BY numart, empresa_id "
+            " ) subquery_suma "
+            "   ON ag_hijo.numart = subquery_suma.numart "
+            "  AND ag_hijo.empresa_id = subquery_suma.empresa_id "
+            " SET ag_hijo.mad_mes_receta = subquery_suma.suma_mad_sku "
+            f" WHERE ag_hijo.empresa_id = {empresa_id} "
+            "   AND ag_hijo.cantidad_receta > 0 "
+        )
+        return session.execute_update(sql)
+
+    def sumar_mad_combo_sku_por_ids_reabasto(self, session: DBSession, empresa_id: int) -> int:
+        sql = (
+            " UPDATE reabasto_calculos_combos "
+            " SET mad = COALESCE(mad_mes_receta, 0) + COALESCE(mad_sku, 0) "
+            f" WHERE empresa_id = {empresa_id} "
+            "   AND (mad_mes_receta IS NOT NULL OR mad_sku IS NOT NULL) "
+            "   AND cantidad_receta > 0 "
+        )
+        return session.execute_update(sql)
+
+    def actualizar_mad_combo_desde_reabasto(self, session: DBSession, empresa_id: int, fecha: str) -> int:
+        sql = (
+            " UPDATE abc_generado ag "
+            " INNER JOIN ( "
+            "   SELECT numart, empresa_id, MAX(mad_mes_receta) AS mad_mes_receta "
+            "   FROM reabasto_calculos_combos "
+            f"   WHERE empresa_id = {empresa_id} "
+            "   GROUP BY numart, empresa_id "
+            " ) rcc "
+            "   ON ag.numart = rcc.numart "
+            "  AND ag.empresa_id = rcc.empresa_id "
+            " SET ag.mad_combo = rcc.mad_mes_receta "
+            f" WHERE ag.empresa_id = {empresa_id} "
+            f"   AND DATE(ag.fecha_creacion) = DATE('{fecha}') "
+            "   AND ag.tipo_abc IN ('18') "
+        )
+        return session.execute_update(sql)
+
+    def sumar_mad_combo_sku_por_ids_correcto(
+        self,
+        session: DBSession,
+        empresa_id: int,
+        fecha: str,
+        lote_size: int = 500,
+    ) -> int:
+        sql_ids = (
+            " SELECT id_abc "
+            " FROM abc_generado "
+            f" WHERE empresa_id = {empresa_id} "
+            f"   AND DATE(fecha_creacion) = DATE('{fecha}') "
+            "   AND tipo_abc IN ('18') "
+            "   AND (mad_combo IS NOT NULL OR mad_sku IS NOT NULL) "
+            " ORDER BY id_abc "
+        )
+        ids = [int(x) for x in session.query_list(sql_ids)]
+        if not ids:
+            return 0
+
+        total = 0
+        for i in range(0, len(ids), lote_size):
+            chunk = ids[i : i + lote_size]
+            ids_str = ",".join(str(x) for x in chunk)
+            sql_update = (
+                " UPDATE abc_generado "
+                " SET mad = COALESCE(mad_combo, 0) + COALESCE(mad_sku, 0) "
+                f" WHERE empresa_id = {empresa_id} "
+                f"   AND id_abc IN ({ids_str}) "
+            )
+            total += session.execute_update(sql_update)
+        return total
+
     def eliminar_tipo_abc_por_lotes(self, session, table, codigo_abc, batch_size=100):
         import time
 
