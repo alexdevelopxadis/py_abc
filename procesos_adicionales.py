@@ -8,6 +8,58 @@ from .utils import fmt
 
 
 class ProcesosAdicionales:
+    def actualizar_mad_combo(self, session: DBSession, empresa_id: int, fecha: str) -> int:
+        sql = (
+            " UPDATE abc_generado ag_hijo "
+            " INNER JOIN rel_combo_articulo r "
+            "   ON ag_hijo.numart = r.numart "
+            "  AND ag_hijo.empresa_id = r.empresa_id "
+            " INNER JOIN abc_generado ag_padre "
+            "   ON r.cod_combo = ag_padre.numart "
+            "  AND ag_padre.empresa_id = r.empresa_id "
+            f"  AND DATE(ag_padre.fecha_creacion) = DATE('{fecha}') "
+            "  AND ag_padre.tipo_abc = ag_hijo.tipo_abc "
+            "  AND ag_padre.numalm = ag_hijo.numalm "
+            " SET ag_hijo.mad_combo = ag_padre.mad_sku "
+            f" WHERE ag_hijo.empresa_id = {empresa_id} "
+            f"   AND DATE(ag_hijo.fecha_creacion) = DATE('{fecha}') "
+            "   AND ag_hijo.tipo_abc IN ('20', '21', '18', '19') "
+        )
+        return session.execute_update(sql)
+
+    def sumar_mad_combo_sku_por_ids(
+        self,
+        session: DBSession,
+        empresa_id: int,
+        fecha: str,
+        lote_size: int = 500,
+    ) -> int:
+        sql_ids = (
+            " SELECT id_abc "
+            " FROM abc_generado "
+            f" WHERE empresa_id = {empresa_id} "
+            f"   AND DATE(fecha_creacion) = DATE('{fecha}') "
+            "   AND tipo_abc IN ('20', '21', '18', '19') "
+            "   AND (mad_combo IS NOT NULL OR mad_sku IS NOT NULL) "
+            " ORDER BY id_abc "
+        )
+        ids = [int(x) for x in session.query_list(sql_ids)]
+        if not ids:
+            return 0
+
+        total = 0
+        for i in range(0, len(ids), lote_size):
+            chunk = ids[i : i + lote_size]
+            ids_str = ",".join(str(x) for x in chunk)
+            sql_update = (
+                " UPDATE abc_generado "
+                " SET mad = COALESCE(mad_combo, 0) + COALESCE(mad_sku, 0) "
+                f" WHERE empresa_id = {empresa_id} "
+                f"   AND id_abc IN ({ids_str}) "
+            )
+            total += session.execute_update(sql_update)
+        return total
+
     def eliminar_tipo_abc_por_lotes(self, session, table, codigo_abc, batch_size=100):
         import time
 

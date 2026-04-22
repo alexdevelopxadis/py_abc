@@ -59,4 +59,12 @@ class PrincipalABC:
             if is_ejecucion_total or proceso.upper() == "AMI":
                 proc.procesar_abc(session, codigo_empresa, "ALMACEN_MARCA_INDIV", fecha_desde, fecha_hasta, False)
 
+            cant_actualizadas = proc.actualizar_mad_combo(session, codigo_empresa, fecha_ejecucion)
+            total_actualizadas = proc.sumar_mad_combo_sku_por_ids(session, codigo_empresa, fecha_ejecucion)
+            print(
+                f"{fmt(datetime.now(), 'dd-MM-yyyy HH:mm:ss')} - "
+                f"empresa:{codigo_empresa} mad_combo_actualizadas:{cant_actualizadas} "
+                f"mad_total_actualizadas:{total_actualizadas}"
+            )
+
         print(f"{fmt(datetime.now(), 'dd-MM-yyyy HH:mm:ss')} - *** FIN PROCESO ABC ***")
